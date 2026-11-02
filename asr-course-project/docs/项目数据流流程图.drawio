@@ -1,0 +1,206 @@
+<mxGraphModel dx="2250" dy="1282" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2250" pageHeight="1282" background="#F5F7FB" math="0" shadow="0">
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+
+    <mxCell id="bg" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#F5F7FB;strokeColor=none;" vertex="1" parent="1">
+      <mxGeometry x="0" y="0" width="2250" height="1282" as="geometry" />
+    </mxCell>
+
+    <mxCell id="card1" value="" style="rounded=1;arcSize=1.82;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#60A5FA;strokeWidth=1;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="50" y="40" width="440" height="1032" as="geometry" />
+    </mxCell>
+    <mxCell id="h1" value="&lt;b style='font-size:20px'&gt;01　数据处理&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:13px' color='#DBEAFE'&gt;原始 TIMIT → 可训练样本&lt;/font&gt;" style="rounded=1;arcSize=13.33;whiteSpace=wrap;html=1;fillColor=#1D4ED8;strokeColor=none;align=left;verticalAlign=middle;spacingLeft=20;fontColor=#FFFFFF;fontFamily=Microsoft YaHei;" vertex="1" parent="1">
+      <mxGeometry x="74" y="66" width="392" height="60" as="geometry" />
+    </mxCell>
+
+    <mxCell id="n11" value="&lt;b style='font-size:16px'&gt;TIMIT 原始语料&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;TRAIN 462 人 · TEST 168 人&lt;br&gt;16 kHz 英文朗读&lt;br&gt;wav + 原始转写文本&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="80" y="158" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n12" value="&lt;b style='font-size:16px'&gt;prepare_timit.py&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;筛选 1–8 s · 单声道&lt;br&gt;写标准 wav + transcription.txt&lt;br&gt;统计字符表&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="80" y="308" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n13" value="&lt;b style='font-size:16px'&gt;vocab.json（29 类）&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;blank + 空格 + 撇号 + a–z&lt;br&gt;blank_id = 0&lt;br&gt;封闭词表，无 UNK&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="80" y="458" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n14" value="&lt;b style='font-size:16px'&gt;dataset.py 特征化&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;80 维 log-mel · 512 FFT&lt;br&gt;400 采样窗 / 160 跳 · 100 fps&lt;br&gt;log10 压缩&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="80" y="608" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n15" value="&lt;b style='font-size:16px'&gt;全局 CMVN + 缓存&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;1,409,882 帧统计量&lt;br&gt;特征 .npy 缓存 452 MB&lt;br&gt;训练 / 推理共用同一契约&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#3B82F6;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="80" y="758" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="o1" value="&lt;b style='font-size:12px' color='#666666'&gt;输出 → 下一环节&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:12px' color='#666666'&gt;4618 条 wav · 29 类词表&lt;br&gt;transcription.txt · 452 MB 特征缓存&lt;/font&gt;" style="rounded=1;arcSize=6.15;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#CBD5E1;strokeWidth=1.5;dashed=1;dashPattern=4 4;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#666666;" vertex="1" parent="1">
+      <mxGeometry x="80" y="912" width="380" height="130" as="geometry" />
+    </mxCell>
+    <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n11" target="n12">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n12" target="n13">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e13" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n13" target="n14">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e14" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n14" target="n15">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n15" target="o1">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <mxCell id="card2" value="" style="rounded=1;arcSize=1.82;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#A78BFA;strokeWidth=1;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="620" y="40" width="440" height="1032" as="geometry" />
+    </mxCell>
+    <mxCell id="h2" value="&lt;b style='font-size:20px'&gt;02　模型搭建&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:13px' color='#EDE9FE'&gt;特征 → 逐帧字符得分&lt;/font&gt;" style="rounded=1;arcSize=13.33;whiteSpace=wrap;html=1;fillColor=#6D28D9;strokeColor=none;align=left;verticalAlign=middle;spacingLeft=20;fontColor=#FFFFFF;fontFamily=Microsoft YaHei;" vertex="1" parent="1">
+      <mxGeometry x="644" y="66" width="392" height="60" as="geometry" />
+    </mxCell>
+
+    <mxCell id="n21" value="&lt;b style='font-size:16px'&gt;train.py 数据接入&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;batch = 32 · num_workers = 0&lt;br&gt;特征 / 标签 / 长度打包&lt;br&gt;注入全局 CMVN&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="650" y="158" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n22" value="&lt;b style='font-size:16px'&gt;model.py 主干&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;输入投影 → 5 层 BiLSTM&lt;br&gt;→ 输出投影&lt;br&gt;29,982,237 个参数&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="650" y="308" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n23" value="&lt;b style='font-size:16px'&gt;逐帧字符得分&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;输出形状 [B, T, 29]&lt;br&gt;每一帧给出 29 个字符打分&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="650" y="458" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n24" value="&lt;b style='font-size:16px'&gt;CTC Loss&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;自动对齐帧与字&lt;br&gt;无需逐帧人工标注&lt;br&gt;blank = 0 · zero_infinity&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="650" y="608" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n25" value="&lt;b style='font-size:16px'&gt;训练与选优&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;AdamW · warmup + 余弦退火&lt;br&gt;AMP 混合精度 · 梯度裁剪 5.0&lt;br&gt;按验证损失保存 best_model&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#8B5CF6;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="650" y="758" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="o2" value="&lt;b style='font-size:12px' color='#666666'&gt;输出 → 下一环节&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:12px' color='#666666'&gt;best_model.pt（权重 + 词表&lt;br&gt;+ feature_stats）· history.json&lt;/font&gt;" style="rounded=1;arcSize=6.15;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#CBD5E1;strokeWidth=1.5;dashed=1;dashPattern=4 4;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#666666;" vertex="1" parent="1">
+      <mxGeometry x="650" y="912" width="380" height="130" as="geometry" />
+    </mxCell>
+    <mxCell id="e21" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n21" target="n22">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e22" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n22" target="n23">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e23" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n23" target="n24">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e24" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n24" target="n25">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e25" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n25" target="o2">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <mxCell id="card3" value="" style="rounded=1;arcSize=1.82;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2DD4BF;strokeWidth=1;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="1190" y="40" width="440" height="1032" as="geometry" />
+    </mxCell>
+    <mxCell id="h3" value="&lt;b style='font-size:20px'&gt;03　模型推理&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:13px' color='#CCFBF1'&gt;权重 → 一句识别文本&lt;/font&gt;" style="rounded=1;arcSize=13.33;whiteSpace=wrap;html=1;fillColor=#0F766E;strokeColor=none;align=left;verticalAlign=middle;spacingLeft=20;fontColor=#FFFFFF;fontFamily=Microsoft YaHei;" vertex="1" parent="1">
+      <mxGeometry x="1214" y="66" width="392" height="60" as="geometry" />
+    </mxCell>
+
+    <mxCell id="n31" value="&lt;b style='font-size:16px'&gt;SpeechRecognizer&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;加载 checkpoint&lt;br&gt;恢复词表 + feature_stats&lt;br&gt;空白符下标 = 0&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0D9488;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="1220" y="158" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n32" value="&lt;b style='font-size:16px'&gt;extract_features&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;80 维 log-mel&lt;br&gt;与训练完全相同的参数&lt;br&gt;全局 CMVN 归一化&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0D9488;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="1220" y="308" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n33" value="&lt;b style='font-size:16px'&gt;model.forward&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;输出 [B, T, 29]&lt;br&gt;逐帧字符概率&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0D9488;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="1220" y="458" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n34" value="&lt;b style='font-size:16px'&gt;解码&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;贪婪：argmax → 合并重复 → 去 blank&lt;br&gt;束搜索：保留 Top-K 候选路径&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0D9488;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="1220" y="608" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n35" value="&lt;b style='font-size:16px'&gt;识别文本&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;FCJF0_SI1027.wav&lt;br&gt;even then if she took one step&lt;br&gt;forward he could catch her&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#0D9488;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="1220" y="758" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="o3" value="&lt;b style='font-size:12px' color='#666666'&gt;输出 → 下一环节&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:12px' color='#666666'&gt;每个测试样本的识别文本&lt;br&gt;可直接与标准标注逐字比对&lt;/font&gt;" style="rounded=1;arcSize=6.15;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#CBD5E1;strokeWidth=1.5;dashed=1;dashPattern=4 4;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#666666;" vertex="1" parent="1">
+      <mxGeometry x="1220" y="912" width="380" height="130" as="geometry" />
+    </mxCell>
+    <mxCell id="e31" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n31" target="n32">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e32" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n32" target="n33">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e33" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n33" target="n34">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e34" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n34" target="n35">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e35" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n35" target="o3">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <mxCell id="card4" value="" style="rounded=1;arcSize=1.82;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FBBF24;strokeWidth=1;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="1760" y="40" width="440" height="1032" as="geometry" />
+    </mxCell>
+    <mxCell id="h4" value="&lt;b style='font-size:20px'&gt;04　数据准确率测试&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:13px' color='#FEF3C7'&gt;识别文本 vs 标注 → CER&lt;/font&gt;" style="rounded=1;arcSize=13.33;whiteSpace=wrap;html=1;fillColor=#B45309;strokeColor=none;align=left;verticalAlign=middle;spacingLeft=20;fontColor=#FFFFFF;fontFamily=Microsoft YaHei;" vertex="1" parent="1">
+      <mxGeometry x="1784" y="66" width="392" height="60" as="geometry" />
+    </mxCell>
+
+    <mxCell id="n41" value="&lt;b style='font-size:16px'&gt;evaluate_model&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;测试集 1680 条逐条推理&lt;br&gt;收集识别文本与标准标注&lt;br&gt;形成两份平行文本&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="1790" y="158" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n42" value="&lt;b style='font-size:16px'&gt;_normalize_text&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;小写 · 去标点&lt;br&gt;按配置保留空格&lt;br&gt;避免格式差异污染 CER&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="1790" y="308" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n43" value="&lt;b style='font-size:16px'&gt;编辑距离&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;逐句回溯对齐&lt;br&gt;替换 S · 删除 D · 插入 I&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="1790" y="458" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n44" value="&lt;b style='font-size:16px'&gt;语料级 CER&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;Σ(S+D+I) / Σ参考字数&lt;br&gt;15,721 / 78,758&lt;br&gt;长句权重自然更大&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="1790" y="608" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="n45" value="&lt;b style='font-size:16px'&gt;evals/eval_test.json&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;CER 19.96%&lt;br&gt;S 10.68% · D 6.60% · I 2.68%&lt;br&gt;另存 e50 / 75 / 85 / 95 曲线&lt;/font&gt;" style="rounded=1;arcSize=6.56;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#0F172A;" vertex="1" parent="1">
+      <mxGeometry x="1790" y="758" width="380" height="122" as="geometry" />
+    </mxCell>
+    <mxCell id="o4" value="&lt;b style='font-size:12px' color='#666666'&gt;结论&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:12px' color='#666666'&gt;训练集 0.0032% vs 测试集 19.96%&lt;br&gt;以测试集作为真实泛化指标&lt;/font&gt;" style="rounded=1;arcSize=6.15;whiteSpace=wrap;html=1;fillColor=#FAFAFA;strokeColor=#CBD5E1;strokeWidth=1.5;dashed=1;dashPattern=4 4;align=left;verticalAlign=middle;spacingLeft=18;spacingRight=16;fontFamily=Microsoft YaHei;fontColor=#666666;" vertex="1" parent="1">
+      <mxGeometry x="1790" y="912" width="380" height="130" as="geometry" />
+    </mxCell>
+    <mxCell id="e41" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n41" target="n42">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e42" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n42" target="n43">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e43" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n43" target="n44">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e44" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n44" target="n45">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="e45" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#94A3B8;strokeWidth=1.5;endArrow=block;endFill=1;" edge="1" parent="1" source="n45" target="o4">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+
+    <mxCell id="s12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#334155;strokeWidth=2.5;endArrow=block;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="card1" target="card2">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="s23" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#334155;strokeWidth=2.5;endArrow=block;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="card2" target="card3">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="s34" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#334155;strokeWidth=2.5;endArrow=block;endFill=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="card3" target="card4">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="l12" value="样本 + 标签" style="rounded=1;arcSize=28.57;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=none;align=center;verticalAlign=middle;fontFamily=Microsoft YaHei;fontColor=#1E293B;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="493" y="514" width="124" height="28" as="geometry" />
+    </mxCell>
+    <mxCell id="l23" value="权重 + 词表" style="rounded=1;arcSize=28.57;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=none;align=center;verticalAlign=middle;fontFamily=Microsoft YaHei;fontColor=#1E293B;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="1063" y="514" width="124" height="28" as="geometry" />
+    </mxCell>
+    <mxCell id="l34" value="识别文本 + 标注" style="rounded=1;arcSize=28.57;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=none;align=center;verticalAlign=middle;fontFamily=Microsoft YaHei;fontColor=#1E293B;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="1633" y="514" width="124" height="28" as="geometry" />
+    </mxCell>
+
+    <mxCell id="k1" value="&lt;b style='font-size:24px'&gt;4618 / 1680&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;训练 / 测试语音条数&lt;/font&gt;" style="rounded=1;arcSize=6.15whiteSpace=wrap;html=1;fillColor=#EEF4FF;strokeColor=#1D4ED8;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Microsoft YaHei;fontColor=#0F172A;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="50" y="1112" width="440" height="130" as="geometry" />
+    </mxCell>
+    <mxCell id="k2" value="&lt;b style='font-size:24px'&gt;29,982,237&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;正式模型参数总量&lt;/font&gt;" style="rounded=1;arcSize=6.15whiteSpace=wrap;html=1;fillColor=#F6F1FF;strokeColor=#6D28D9;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Microsoft YaHei;fontColor=#0F172A;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="620" y="1112" width="440" height="130" as="geometry" />
+    </mxCell>
+    <mxCell id="k3" value="&lt;b style='font-size:24px'&gt;逐字一致&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;FCJF0_SI1027.wav 推理样例&lt;/font&gt;" style="rounded=1;arcSize=6.15whiteSpace=wrap;html=1;fillColor=#EDFAF6;strokeColor=#0F766E;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Microsoft YaHei;fontColor=#0F172A;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="1190" y="1112" width="440" height="130" as="geometry" />
+    </mxCell>
+    <mxCell id="k4" value="&lt;b style='font-size:24px'&gt;CER 19.96%&lt;/b&gt;&lt;br&gt;&lt;font style='font-size:14px' color='#334155'&gt;测试集 · 1680 条&lt;/font&gt;" style="rounded=1;arcSize=6.15whiteSpace=wrap;html=1;fillColor=#FFF7E8;strokeColor=#B45309;strokeWidth=1.5;align=center;verticalAlign=middle;fontFamily=Microsoft YaHei;fontColor=#0F172A;shadow=1;" vertex="1" parent="1">
+      <mxGeometry x="1760" y="1112" width="440" height="130" as="geometry" />
+    </mxCell>
+  </root>
+</mxGraphModel>

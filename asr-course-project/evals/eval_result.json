@@ -1,0 +1,12 @@
+{
+  "cer": 3.225642939758814e-05,
+  "total_distance": 7,
+  "total_substitutions": 0,
+  "total_deletions": 7,
+  "total_insertions": 0,
+  "total_ref_len": 217011,
+  "substitution_rate": 0.0,
+  "deletion_rate": 3.225642939758814e-05,
+  "insertion_rate": 0.0,
+  "num_samples": 4618
+}

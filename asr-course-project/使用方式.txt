@@ -1,0 +1,181 @@
+============================================================
+5层LSTM + CTC 语音识别（TIMIT 全量 4618 条）—— 运行命令手册
+============================================================
+环境：conda DL-Env（Python + CUDA torch），GPU: RTX 3060 Laptop 6GB
+工作目录：所有命令在 asr-my-project\ 下执行
+  cd E:\User_information_Desk\c语言课程作业\DL理论\2\asr-my-project
+
+数据集现状（data\proc）：
+  4618 条语音 / 462 个说话人 / 共 236.5 分钟 / 词表 29 类
+  词表 = <blank> + 空格 + 撇号 + a~z（blank=0，封闭词表，无 <unk>）
+
+------------------------------------------------------------
+0. 首次准备（环境已配好可跳过）
+------------------------------------------------------------
+conda activate DL-Env
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+pip install -r requirements.txt
+
+# 验证 GPU 可用
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+
+------------------------------------------------------------
+1. 数据准备（data\proc 已就绪，只有重生成时才需要）
+------------------------------------------------------------
+# 全量（默认 --num 0 = 不限制条数，取 TRAIN 全部可用语句）
+python prepare_timit.py --src data\raw\TIMIT\raw\data\TRAIN --dst data\proc
+
+# 子集模式：每人最多 5 条，凑满 N 条（冒烟 / 快速实验用）
+python prepare_timit.py --src data\raw\TIMIT\raw\data\TRAIN --dst data\proc --num 50
+
+# 排除 SA1/SA2 校准句（630 人重复朗读固定句，词汇多样性低）
+python prepare_timit.py --src data\raw\TIMIT\raw\data\TRAIN --dst data\proc --exclude_sa
+
+# 产出：data\proc\audio\*.wav + transcription.txt + data\proc\vocab.json
+#       同时把仅含 idx2char 的词表复制到项目根 vocab.json（train/run_demo 直接读）
+# 筛选规则：时长 1.0-8.0s、清洗后文本 10-200 字符、
+#           CTC 约束 T >= 2L+1 全部校验（帧率 100 fps，T = 1 + (N-400)/160）
+
+------------------------------------------------------------
+2. 特征缓存（默认开启，本轮新增）
+------------------------------------------------------------
+# mel 特征按样本落盘，位置：data\proc\cache\
+#   mel_<签名哈希>\<utt>.npy      每条一个（float32，全量约 452 MB）
+#   mel_<签名哈希>\meta.json      记录特征参数签名、条数、预计算耗时
+#   cmvn_<签名哈希>_<清单指纹>_<条数>.npz   全局 CMVN 的 mean/std
+#
+# 目录名来自「采样率/n_mels/n_fft/hop_length/win_length + 提取后端 + 缓存版本」
+# 的 md5 前 10 位，改了任何一个特征参数都会自动换到新目录，不会误读旧特征。
+
+# 默认行为（无需加参数）：首次缺失才预计算，之后全部命中
+python run_demo.py --limit 8
+
+# 关闭缓存（每次都现算特征，仅用于对比 / 排错）
+python run_demo.py --no_cache
+
+# 强制重建全部缓存（改了特征实现、或怀疑缓存损坏时）
+python run_demo.py --rebuild_cache
+
+# 失效规则：
+#   1) 特征参数或 CACHE_VERSION 变化 -> 整体换目录，全部重算；
+#   2) 单条音频被重新生成（size/mtime 变化）-> 只重算该条（实测 1/4618）；
+#   3) --limit 子集运行不会让全量缓存失效，子集直接复用已有条目。
+#
+# 清缓存：直接删 data\proc\cache 目录，下次运行自动重建（全量 8 进程约 28s）
+
+------------------------------------------------------------
+3. 端到端演示（推荐入口：训练 -> 推理 -> CER 一条龙）
+------------------------------------------------------------
+# 快速冒烟（8 条，几分钟，验证链路通）
+python run_demo.py --limit 8
+
+# 中等规模（200 条，10-20 分钟，看收敛趋势）
+python run_demo.py --limit 200 --epochs 30
+
+# 全量演示（4618 条，默认 50 epoch，hidden_dim=128 / 1.89M 参数）
+python run_demo.py
+
+# 输出：demo_checkpoints\demo_model.pt（含 vocab 与全局 CMVN 统计量）
+# 每 10 epoch 打印训练集 CER 和样例解码，可实时观察收敛情况
+
+------------------------------------------------------------
+4. 正式训练（train.py，支持验证集选优）
+------------------------------------------------------------
+# 全量训练（推荐：batch_size 32，AMP 默认开启）
+python train.py --train_dir data\proc --val_dir data\proc --vocab_path vocab.json --batch_size 32 --epochs 100 --hidden_dim 128 --num_layers 5 --num_workers 0
+
+# 说明：
+#   --val_dir data\proc     用同批数据做验证（自评），会保存 best_model.pt
+#   不加 --val_dir          只保存 checkpoint_epochN.pt 和 final_model.pt
+#   输出目录                checkpoints\（可用 --save_dir 改）
+#   --hidden_dim 默认 512   显存允许但更慢；复现实验建议显式写 128
+#   --use_amp               默认开启（混合精度），无需手动添加
+#
+# 学习率：线性 warmup -> 余弦退火到 base_lr * --min_lr_ratio（默认 0.01）
+#   total_steps = epochs * len(train_loader)，warmup_steps 默认 1000
+#   （旧版 warmup 后 lr 恒定，是 loss 长期横盘的主因，已修复）
+
+------------------------------------------------------------
+5. 单条推理（inference.py）
+------------------------------------------------------------
+# 贪心解码（beam_width=1）
+python inference.py --model demo_checkpoints\demo_model.pt --audio data\proc\audio\FCJF0_SI1027.wav --beam_width 1
+
+# 束搜索（beam_width=5）
+python inference.py --model demo_checkpoints\demo_model.pt --audio data\proc\audio\FCJF0_SI1027.wav --beam_width 5
+
+# 推理端特征与训练缓存共用同一实现，归一化用 checkpoint 里保存的全局 CMVN 统计量
+
+------------------------------------------------------------
+6. CER 评估（cer.py）
+------------------------------------------------------------
+# 单对文本
+python cer.py single --ref "even then if she took one step forward" --hyp "even then she took one step" --remove_space --detailed
+
+# 端到端批量评估（全量 4618 条，结果存 evals\eval_result.json）
+python cer.py eval --model demo_checkpoints\demo_model.pt --test_dir data\proc --beam_width 1 --output evals\eval_result.json
+
+# 用正式训练的模型评估（测试集为 TIMIT 官方 TEST，1680 条）
+python cer.py eval --model checkpoints\best_model.pt --test_dir data\proc_test --beam_width 1 --output evals\eval_test.json
+
+# 说明：所有评估结果统一放在 evals\ 目录，--output 省略时默认也写到 evals\eval_result.json
+
+------------------------------------------------------------
+7. 常用调优参数速查
+------------------------------------------------------------
+python run_demo.py --epochs 300            延长训练（CER 仍高时首选）
+python run_demo.py --lr 3e-4               降低学习率（loss 横盘时）
+python run_demo.py --warmup_steps 200      加长 warmup（早期塌缩时）
+python run_demo.py --min_lr_ratio 0.001    退火到更低 lr（后期精修更细）
+python run_demo.py --hidden_dim 256        增大模型容量（训练更快记住数据）
+python run_demo.py --batch_size 16         加大 batch（显存换速度，6GB 可到 64）
+python run_demo.py --num_workers 4         多进程取数（Windows 建议保持 0）
+python run_demo.py --show 10               推理演示打印更多样例
+
+诊断口诀：
+  loss 卡在 ~3.37(ln29) 且解码全空 -> blank 塌缩：降 lr / 加 warmup / 加 epoch
+  CER 高但持续下降                 -> 正常爬坡：加 epoch
+  loss=inf/nan                     -> 检查数据长度约束 T>=2L+1
+  CER 一直 100%                    -> 词表未收录字符（确认 vocab.json 为 29 类）
+
+------------------------------------------------------------
+8. 硬件与耗时实测（RTX 3060 Laptop 6GB，全量 4618 条）
+------------------------------------------------------------
+batch_size        8      16     32     64
+峰值显存(MB)     234    333    530    926
+单 batch(ms)    233.8  199.8  244.0  251.2
+每 epoch 计算(s)  135     58     35     18
+每 epoch 取数(s)  约 6（缓存命中后，与 batch_size 无关）
+
+结论：6GB 显存完全够用，瓶颈是 GPU 计算而非显存；batch_size 越大吞吐越高。
+      建议 32（约 41s/epoch，100 epoch 约 1.1 小时）。
+      数据侧 1.27 ms/条，已远低于 GPU 前向反向，不再是瓶颈。
+
+特征缓存实测：
+  数据集构造        0.079s（原 2.858s）
+  缓存命中检查      0.058s（原 8.53s）
+  全局 CMVN         0.008s（首次统计约需遍历一次全量，之后走 .npz）
+  全量预计算        28s（8 进程；原 librosa 路径 >20 分钟）
+  全量遍历一遍      5.86s（1.27 ms/条）
+
+------------------------------------------------------------
+9. 常见问题
+------------------------------------------------------------
+1) Windows 下 --num_workers 建议 0
+   实测 nw=0 约 65ms/batch，nw=4 约 244ms/batch：spawn 启动与 IPC 开销超过收益。
+
+2) 进程最后退出码 -1073740791（0xC0000409）
+   出现在打印「演示完成!」之后，是本机 Python 解释器 teardown 的访问违规，
+   模型与结果均已正常保存，可忽略。
+
+3) 显存不足（OOM）
+   降低 --batch_size（8 起），或减小 --hidden_dim。
+
+4) 运行很久却停在「特征缓存预计算」
+   首次运行需生成缓存（全量约 28s）；若提示为全部命中则只有 0.06s。
+   怀疑缓存异常时加 --rebuild_cache 重建，或直接删 data\proc\cache。
+
+5) 验证集与训练集同源
+   --val_dir data\proc 与 --train_dir 相同，val loss 只反映拟合程度，
+   不代表泛化；需要真实泛化指标请另切一份 TEST 划分。
+============================================================

@@ -1,0 +1,15 @@
+# 安装依赖
+pip install -r requirements.txt
+
+# 运行端到端演示
+python run_demo.py
+
+# 正式训练
+python train.py --train_dir ./data --val_dir ./val_data --batch_size 16 --epochs 100
+
+# 单条推理
+python inference.py --model checkpoints/best_model.pt --audio test.wav --beam_width 10
+
+# CER计算
+python cer.py single --ref "今天天气好" --hyp "今天天气很好" --detailed
+python cer.py eval --model checkpoints/best_model.pt --test_dir ./test_data

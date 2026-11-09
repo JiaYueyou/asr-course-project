@@ -1,0 +1,11 @@
+{
+  "greedy_cer": 0.23348739175702785,
+  "beam25_cer": 0.23162091470072882,
+  "lm_beam25_cer": 0.23643312425404403,
+  "config": {
+    "alpha": 0.2,
+    "beta": 0.05,
+    "beam": 25,
+    "lm": "lm/word_4gram.json (train切分 4158 句)"
+  }
+}

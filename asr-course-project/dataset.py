@@ -7,6 +7,7 @@ import os
 import json
 import time
 import hashlib
+import random
 import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
@@ -213,6 +214,65 @@ def normalize_features(features: np.ndarray, stats: dict = None) -> Tuple[np.nda
 
 
 # ============================================================
+# SpecAugment 数据增强（仅训练集，在 CMVN 归一化后施加）
+# ============================================================
+def spec_augment(
+    features: np.ndarray,
+    n_freq_masks: int = 2,
+    freq_mask_width: int = 15,
+    n_time_masks: int = 2,
+    time_mask_width: int = 40,
+    max_time_ratio: float = 0.2,
+) -> np.ndarray:
+    """对归一化后的特征做频域/时域遮罩（SpecAugment 简化版）。
+
+    遮罩填 0（CMVN 归一化后 0 即全局均值）。TIMIT 句子较短（约
+    100-500 帧），时间遮罩总量限制在时长的 max_time_ratio 内，避免
+    把短句遮成全 0。每次调用随机采样，仅用于训练集。
+    """
+    feats = features.copy()
+    T, F = feats.shape
+
+    for _ in range(n_freq_masks):
+        f = random.randint(1, min(freq_mask_width, F))
+        f0 = random.randint(0, F - f)
+        feats[:, f0:f0 + f] = 0.0
+
+    max_total = int(T * max_time_ratio)
+    masked = 0
+    for _ in range(n_time_masks):
+        if masked >= max_total:
+            break
+        t = random.randint(1, min(time_mask_width, max_total - masked, T))
+        t0 = random.randint(0, T - t)
+        feats[t0:t0 + t, :] = 0.0
+        masked += t
+
+    return feats
+
+
+def split_speakers(data_dir: str, dev_ratio: float, seed: int = 42):
+    """按说话人切分 data_dir 下的数据（说话人 = 文件名首个下划线前的前缀）。
+
+    返回 (train_speakers, dev_speakers)，均为 set[str]。同一份数据 +
+    同一 seed 结果确定，训练可重复。按说话人而非按句子切分，避免同一
+    说话人的句子同时出现在训练/验证两侧造成泄漏。
+    """
+    trans_path = os.path.join(data_dir, "transcription.txt")
+    speakers = set()
+    if os.path.exists(trans_path):
+        with open(trans_path, "r", encoding="utf-8") as f:
+            for line in f:
+                parts = line.strip().split(maxsplit=1)
+                if parts:
+                    speakers.add(parts[0].split("_", 1)[0])
+    spk_list = sorted(speakers)
+    random.Random(seed).shuffle(spk_list)
+    n_dev = int(round(len(spk_list) * dev_ratio))
+    return set(spk_list[n_dev:]), set(spk_list[:n_dev])
+
+
+# ============================================================
 # 字符词表构建
 # ============================================================
 class Vocabulary:
@@ -308,6 +368,8 @@ class SpeechDataset(Dataset):
         use_cache: bool = True,      # 是否启用 mel 特征磁盘缓存
         cache_dir: Optional[str] = None,  # 默认 <data_dir>/cache
         limit: int = 0,              # >0 时只用前 N 条（冒烟测试）
+        speakers: Optional[set] = None,  # 仅保留这些说话人的样本（说话人不相交切分）
+        apply_specaug: bool = False,     # 训练集 SpecAugment 在线增强
     ):
         self.data_dir = data_dir
         self.vocab = vocab
@@ -321,9 +383,17 @@ class SpeechDataset(Dataset):
         # 加载数据清单（先扫一次 audio 目录，清单校验与缓存对比都复用它）
         self._audio_meta = _scan_dir_meta(os.path.join(data_dir, "audio"))
         self.samples = self._load_manifest()
+        if speakers is not None:
+            before = len(self.samples)
+            self.samples = [
+                (p, t) for p, t in self.samples
+                if os.path.basename(p).split("_", 1)[0] in speakers
+            ]
+            print(f"说话人过滤: {before} -> {len(self.samples)} 条")
         if limit and limit > 0:
             self.samples = self.samples[:limit]
             print(f"仅使用前 {len(self.samples)} 条数据（limit={limit}）")
+        self.apply_specaug = apply_specaug
 
         # 特征统计量 (用于在线归一化)
         self.stats = None
@@ -572,6 +642,10 @@ class SpeechDataset(Dataset):
         # 全局 CMVN：stats 由 train.py 从训练集统计（或推理端从 checkpoint 恢复）；
         # stats 为 None 时退化为逐条归一化（保持原行为）
         features, _ = normalize_features(features, self.stats)
+
+        # SpecAugment：仅训练集，在归一化后施加（遮罩 0 = 全局均值）
+        if self.apply_specaug:
+            features = spec_augment(features)
 
         # 编码文本
         if text:

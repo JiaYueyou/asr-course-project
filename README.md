@@ -105,7 +105,6 @@ python run_demo.py --limit 8
 ```powershell
 python train.py `
   --train_dir data\proc `
-  --val_dir data\proc `
   --vocab_path vocab.json `
   --batch_size 32 `
   --epochs 100 `
@@ -114,12 +113,16 @@ python train.py `
   --num_workers 0
 ```
 
-训练配置：AdamW，学习率 1e-3，weight decay 1e-5，warmup 1000 步后余弦退火到 1%，梯度裁剪 5.0，混合精度开启。输出到 `checkpoints/`：
+未指定 `--val_dir` 时，自动从训练集按**说话人**切出 10% 作验证集（`--dev_ratio` 调整比例，`--dev_seed=42` 保证可复现）。同一说话人的句子不会同时出现在训练/验证两侧，避免说话人泄漏导致验证结果虚高。测试集 `data\proc_test` 只在最终评测时使用。
 
-- `best_model.pt`：验证损失最低的一份；
+训练配置：AdamW，学习率 1e-3，weight decay 1e-4，warmup 1000 步后余弦退火到 1%，梯度裁剪 5.0，混合精度开启；训练集启用 SpecAugment 数据增强（2 个频率遮罩 ≤15 通道 + 2 个时间遮罩 ≤40 帧、总量 ≤时长 20%，`--no_specaug` 关闭）。输出到 `checkpoints/`：
+
+- `best_model.pt`：**验证 CER 最低**的一份（贪心解码，与最终评测指标一致）；
 - `checkpoint_epochN.pt`：每 5 个 epoch 存档；
 - `final_model.pt`：最后一个 epoch；
-- `history.json`：逐 epoch 训练/验证损失。
+- `history.json`：逐 epoch 训练/验证损失与验证 CER。
+
+验证 CER 连续 10 个 epoch 无改善自动早停（`--patience` 调整，0 禁用）。
 
 checkpoint 内除权重外还保存词表、`feature_stats`（全局 CMVN 统计量）和训练参数，推理端直接恢复，保证训练/推理输入一致。
 
@@ -150,12 +153,17 @@ python cer.py eval `
 | 项目 | 结果 |
 |---|---|
 | 正式模型参数量 | 29,982,237（hidden=512，5 层 BiLSTM，29 类输出） |
-| 训练集 CER | 0.0032%（4618 条） |
-| 测试集 CER | **19.96%**（1680 条，参考字数 78,758） |
-| 测试集错误构成 | 替换 10.68% / 删除 6.60% / 插入 2.68% |
+| 验证集 CER（说话人不相交，贪心） | **12.87%**（460 条，e94 最优） |
+| 测试集 CER（贪心） | 23.35%（1680 条，参考字数 78,758） |
+| 测试集 CER（束搜索 beam=25） | **23.16%**（当前最优提交配置） |
+| 测试集 CER（LM 浅融合 beam=25） | 23.64%（负收益，见下方说明） |
 | 单条样例 | `FCJF0_SI1027.wav` → `even then if she took one step forward he could catch her`，与标注逐字一致 |
 
-训练集与测试集差距约 6000 倍，说明模型对训练集过拟合；对外应报告测试集 19.96%，而不是训练集的 0.0032%。
+验证集（dev）从训练集按说话人切出、与测试集均为未见过说话人，dev→test 的约 10.5 点差距来自 TIMIT 测试集的录音域偏移（错误均匀分布于全部 168 位说话人，最差 10 人仅贡献 8.2% 错误，见 `evals/error_analysis.json`）。
+
+优化历程：基线（无增强、验证集误设）测试 CER 19.96% → 说话人切分验证集 + SpecAugment + wd 1e-4 后 dev CER 由 ~20% 降至 12.87%（同域大幅改善）→ 修复 CTC 前缀束搜索实现缺陷（两处：blank 分数免费携带、同字符经 blank 扩展丢失），beam10 恢复正常（测试集 23.17%，修复前为 60%+ 的垃圾输出）。
+
+**语言模型浅融合实验（负结果，如实记录）**：自实现 4-gram 词级 LM（仅 train 切分 4158 句训练，dev 调 α/β），dev 上收益 -0.61 点（12.80%→12.19%），但测试集 +0.48 点（23.16%→23.64%）。原因：TIMIT 测试集与训练集**句子文本不相交**，测试集词型 OOV 率达 50.8%，LM 对含未登录词的正确句子施加过重惩罚；dev 与 train 同源文本（OOV≈0）掩盖了这一点。详见 `evals/lm_tuning*.json`、`evals/eval_test_lm.json`。全量重训对照实验（train+dev 合并 4618 条）测试 CER 24.38%，亦无收益（训练方差大于 10% 数据的边际价值），证据见 `checkpoints_full/history.json`、`evals/eval_test_full_data.json`。
 
 各 epoch 测试结果已归档：
 
@@ -206,4 +214,4 @@ evals/
 1. **报 `ModuleNotFoundError: torch`**：当前 Python 不在 `DL-Env` 环境，执行 `conda activate DL-Env`。
 2. **`torch.load` 报找不到 `dataset`**：在 `asr-course-project/` 目录下运行，checkpoint 内含 `Vocabulary` 对象需要该模块可导入。
 3. **Windows 下训练很慢**：`--num_workers` 保持 0。实测缓存命中时 `nw=0` 约 65 ms/batch，`nw=4` 约 244 ms/batch，多进程启动与序列化开销超过收益。
-4. **束搜索结果反而更差**：当前未接语言模型，`beam=5` 会保留「发音像但不成词」的候选，建议先用 `--beam_width 1` 贪婪解码。
+4. **束搜索与贪心基本持平**：`_beam_search_decode` 原实现有两处缺陷（blank 分数免费携带导致概率虚增、同字符经 blank 的扩展丢失），已按标准 CTC 前缀束搜索（Hannun et al., 2014）修复。修复后 beam=10 与贪心持平（全量测试集见 `evals/eval_test_beam.json`）。无语言模型时束搜索收益≈0（CTC 条件独立假设下贪心已近似最优），其价值在于后续接入词级语言模型（浅融合）时承载 n-best 候选。

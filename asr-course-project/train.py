@@ -19,8 +19,9 @@ from torch.cuda.amp import GradScaler, autocast
 from model import DeepSpeech2
 from dataset import (
     SpeechDataset, Vocabulary, create_dataloader,
-    normalize_features,
+    normalize_features, split_speakers,
 )
+from cer import compute_cer_corpus
 
 
 # ============================================================
@@ -31,7 +32,11 @@ def parse_args():
 
     # 数据
     parser.add_argument("--train_dir", type=str, required=True, help="训练数据目录")
-    parser.add_argument("--val_dir", type=str, default=None, help="验证数据目录")
+    parser.add_argument("--val_dir", type=str, default=None,
+                        help="验证数据目录；未指定时按 --dev_ratio 从训练集说话人切分")
+    parser.add_argument("--dev_ratio", type=float, default=0.1,
+                        help="从训练集按说话人切出的验证集比例（--val_dir 未指定时生效），0 表示不切分")
+    parser.add_argument("--dev_seed", type=int, default=42, help="说话人切分随机种子")
     parser.add_argument("--vocab_path", type=str, default="vocab.json", help="词表保存路径")
 
     # 模型
@@ -46,11 +51,16 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--lr_decay", type=float, default=0.9)
-    parser.add_argument("--weight_decay", type=float, default=1e-5)
+    parser.add_argument("--weight_decay", type=float, default=1e-4,
+                        help="AdamW 解耦权重衰减（原 1e-5 几乎不起作用，提一个量级抑制过拟合）")
     parser.add_argument("--grad_clip", type=float, default=5.0)
     parser.add_argument("--warmup_steps", type=int, default=1000)
     parser.add_argument("--min_lr_ratio", type=float, default=0.01,
                         help="余弦退火最低 lr 比例（相对 base_lr），默认退火到 1%%")
+    parser.add_argument("--no_specaug", action="store_true",
+                        help="禁用训练集 SpecAugment 数据增强（默认启用）")
+    parser.add_argument("--patience", type=int, default=10,
+                        help="验证 CER 连续 N 个 epoch 无改善则早停，0 表示不早停")
 
     # 设备
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
@@ -215,12 +225,20 @@ def train_epoch(
 def validate(
     model: nn.Module,
     dataloader,
+    dataset,
     ctc_loss_fn: CTCLossWrapper,
     device: torch.device,
-) -> float:
-    """验证"""
+):
+    """验证：返回 (平均 CTC 损失, 语料级贪心解码 CER)。
+
+    CER 与最终评测指标一致，作为模型选择/早停依据；CTC 损失仅作参考
+    （与 CER 不完全单调对应）。dataloader 必须 shuffle=False，保证
+    解码文本与 dataset.samples 的参考文本顺序一致。
+    """
     model.eval()
     total_loss = 0.0
+    refs = [text for _, text in dataset.samples]
+    hyps = []
 
     for batch in tqdm(dataloader, desc="Validating"):
         features = batch["features"].to(device)
@@ -232,7 +250,15 @@ def validate(
         loss = ctc_loss_fn(log_probs, labels, output_lengths, label_lengths)
         total_loss += loss.item()
 
-    return total_loss / len(dataloader)
+        # 贪心解码：每帧 argmax -> 合并连续重复 -> 去 blank -> 映射字符
+        ids = log_probs.argmax(dim=-1).cpu()
+        for b in range(ids.shape[0]):
+            seq = ids[b, : int(output_lengths[b])].tolist()
+            collapsed = [k for i, k in enumerate(seq) if i == 0 or k != seq[i - 1]]
+            hyps.append(dataset.vocab.decode(collapsed))
+
+    cer = compute_cer_corpus(refs, hyps)["cer"]
+    return total_loss / len(dataloader), cer
 
 
 # ============================================================
@@ -264,20 +290,46 @@ def main():
 
     # ========== 2. 加载数据 ==========
     print("\n加载数据...")
-    train_dataset = SpeechDataset(args.train_dir, vocab,
-                                  use_cache=not args.no_cache)
-    val_loader = None
+    use_specaug = not args.no_specaug
+    print(f"SpecAugment 数据增强: {'开启' if use_specaug else '关闭'}（仅训练集）")
+
     if args.val_dir:
+        # 显式指定外部验证目录
+        train_dataset = SpeechDataset(args.train_dir, vocab,
+                                      use_cache=not args.no_cache,
+                                      apply_specaug=use_specaug)
         val_dataset = SpeechDataset(args.val_dir, vocab,
                                     use_cache=not args.no_cache)
+    elif args.dev_ratio > 0:
+        # 说话人不相交切分：同一说话人的句子不会同时出现在训练/验证两侧
+        train_speakers, val_speakers = split_speakers(
+            args.train_dir, args.dev_ratio, args.dev_seed)
+        print(f"说话人切分: 训练 {len(train_speakers)} 人 / 验证 {len(val_speakers)} 人 "
+              f"(dev_ratio={args.dev_ratio}, seed={args.dev_seed})")
+        train_dataset = SpeechDataset(args.train_dir, vocab,
+                                      use_cache=not args.no_cache,
+                                      speakers=train_speakers,
+                                      apply_specaug=use_specaug)
+        val_dataset = SpeechDataset(args.train_dir, vocab,
+                                    use_cache=not args.no_cache,
+                                    speakers=val_speakers)
+    else:
+        train_dataset = SpeechDataset(args.train_dir, vocab,
+                                      use_cache=not args.no_cache,
+                                      apply_specaug=use_specaug)
+        val_dataset = None
+
+    print(f"训练集 {len(train_dataset)} 条"
+          + (f"，验证集 {len(val_dataset)} 条" if val_dataset is not None else "，无验证集"))
 
     # 特征预计算：一次性落盘，训练阶段只读缓存
     train_dataset.precompute_features(force=args.rebuild_cache)
-    if args.val_dir:
+    if val_dataset is not None:
         val_dataset.precompute_features(force=args.rebuild_cache)
 
     train_loader = create_dataloader(train_dataset, args.batch_size, shuffle=True, num_workers=args.num_workers)
-    if args.val_dir:
+    val_loader = None
+    if val_dataset is not None:
         val_loader = create_dataloader(val_dataset, args.batch_size, shuffle=False, num_workers=args.num_workers)
 
     # ========== 2.5 全局 CMVN 统计量（训练/验证/推理三方共用，保证输入分布一致） ==========
@@ -323,8 +375,9 @@ def main():
 
     # ========== 5. 训练循环 ==========
     print("\n开始训练...")
-    best_val_loss = float("inf")
-    history = {"train_loss": [], "val_loss": []}
+    best_val_cer = float("inf")
+    epochs_no_improve = 0
+    history = {"train_loss": [], "val_loss": [], "val_cer": []}
 
     for epoch in range(1, args.epochs + 1):
         print(f"\n{'='*60}")
@@ -339,26 +392,37 @@ def main():
         )
         history["train_loss"].append(train_loss)
 
-        # 验证
+        # 验证：val CER 是模型选择与早停的依据
         if val_loader:
-            val_loss = validate(model, val_loader, ctc_loss_fn, device)
+            val_loss, val_cer = validate(
+                model, val_loader, val_dataset, ctc_loss_fn, device)
             history["val_loss"].append(val_loss)
-            print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+            history["val_cer"].append(val_cer)
+            print(f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} "
+                  f"| Val CER: {val_cer:.2%} (best {best_val_cer:.2%})")
 
-            # 保存最佳模型
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
+            # 保存最佳模型（按验证 CER，与最终评测指标一致）
+            if val_cer < best_val_cer:
+                best_val_cer = val_cer
+                epochs_no_improve = 0
                 save_path = os.path.join(args.save_dir, "best_model.pt")
                 torch.save({
                     "epoch": epoch,
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "val_loss": val_loss,
+                    "val_cer": val_cer,
                     "vocab": vocab,
                     "feature_stats": feature_stats,
                     "args": vars(args),
                 }, save_path)
-                print(f"保存最佳模型: {save_path}")
+                print(f"保存最佳模型 (Val CER {val_cer:.2%}): {save_path}")
+            else:
+                epochs_no_improve += 1
+                if args.patience > 0 and epochs_no_improve >= args.patience:
+                    print(f"\n验证 CER 连续 {args.patience} 个 epoch 无改善，早停 "
+                          f"(best Val CER: {best_val_cer:.2%}, epoch {epoch})")
+                    break
         else:
             print(f"Train Loss: {train_loss:.4f}")
 

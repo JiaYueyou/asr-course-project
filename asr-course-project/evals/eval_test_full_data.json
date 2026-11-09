@@ -1,0 +1,5 @@
+{
+  "greedy_cer": 0.24377206125092055,
+  "beam10_cer": 0.24106757408771173,
+  "model": "checkpoints_full/final_model.pt(4618条, e95)"
+}

@@ -162,144 +162,121 @@ class SpeechRecognizer:
         self,
         log_probs: torch.Tensor,
         beam_width: int = 10,
+        lm=None,
+        lm_alpha: float = 0.0,
+        lm_beta: float = 0.0,
     ) -> Tuple[str, List[Tuple[str, float]]]:
         """
-        CTC束搜索解码
+        CTC束搜索解码（可选语言模型浅融合）
 
         每个beam维护:
         - prefix: 解码序列 (不含blank)
-        - score: 累积对数概率
-        - blank_score: 以blank结尾的分数
-        - non_blank_score: 以非blank结尾的分数
+        - (blank_score, non_blank_score): CTC 对数概率（blank/非blank结尾分账）
+        - lm_score / n_words / words / partial: 语言模型状态（无 LM 时不更新）
+
+        浅融合打分: score = log P_ctc + lm_alpha * log P_lm + lm_beta * 词数
+        LM 打分在空格定出词边界时增量触发（4-gram 上文取最近 3 个词）。
 
         Args:
             log_probs: [T, C] log概率
             beam_width: 束宽度
+            lm: WordLM 实例（lm.py），None 则纯声学解码
+            lm_alpha: 语言模型融合权重
+            lm_beta: 词插入奖励（补偿声学模型倾向删词）
 
         Returns:
             best_text: 最优识别文本
             candidates: 所有候选 [(text, score), ...]
         """
         T, C = log_probs.shape
-        probs = log_probs.exp().cpu().numpy()  # 转为概率
+        # 直接在对数域运算，避免 exp/log 往返造成的下溢（原实现的 log(0) 警告来源）
+        log_p = log_probs.cpu().numpy()
 
-        # 初始化beam
-        # prefix -> (blank_score, non_blank_score)
-        beam = {(): (0.0, float("-inf"))}
+        NEG_INF = float("-inf")
+        use_lm = lm is not None and lm_alpha > 0.0
+        space_id = self.vocab.char2idx.get(" ")
+        # 词表里没有空格符号时无法做词级融合，退回纯声学
+        if use_lm and space_id is None:
+            use_lm = False
+
+        def _add(table, prefix, b, nb, lm_st=None):
+            """合并 (blank 分数, 非 blank 分数)；lm_st 为该 prefix 的语言模型状态"""
+            old = table.get(prefix)
+            if old is None:
+                table[prefix] = (np.logaddexp(NEG_INF, b), np.logaddexp(NEG_INF, nb),
+                                 *lm_st)
+            else:
+                table[prefix] = (np.logaddexp(old[0], b), np.logaddexp(old[1], nb),
+                                 *lm_st)  # lm 状态只依赖 prefix 字符串，各路径一致
+
+        # 初始 LM 状态: (lm_score, n_words, words, partial)
+        init_lm = (0.0, 0, (), "")
+        # 初始化 beam: 空前缀 -> (blank 分数, 非 blank 分数, LM 状态)
+        beam = {(): (0.0, NEG_INF, *init_lm)}
 
         for t in range(T):
             new_beam = {}
 
-            for prefix, (b_score, nb_score) in beam.items():
+            for prefix, (b_score, nb_score, lm_score, n_words, words, partial) in beam.items():
                 total_score = np.logaddexp(b_score, nb_score)
 
                 for c in range(C):
-                    p = probs[t, c]
+                    p = log_p[t, c]
+                    # 跳过概率可忽略的字符（p < 3e-7），大幅减少无效扩展
+                    if p < -15.0:
+                        continue
 
                     if c == self.blank_id:
-                        # 扩展blank
-                        new_b_score = np.logaddexp(b_score + np.log(p), nb_score + np.log(p))
-                        new_nb_score = float("-inf")
-                    else:
-                        if len(prefix) > 0 and prefix[-1] == c:
-                            # 相同字符: 非blank扩展
-                            new_b_score = b_score
-                            new_nb_score = np.logaddexp(nb_score + np.log(p), b_score + np.log(p))
+                        # 发射 blank：prefix 不变、以 blank 结尾。
+                        # 注意 blank/非 blank 两条路径都必须消耗本帧发射概率，
+                        # 不允许分数"免费携带"（原实现的 bug 会导致概率质量
+                        # 随帧数虚增，重复字符前缀胜出）
+                        _add(new_beam, prefix, total_score + p, NEG_INF,
+                             (lm_score, n_words, words, partial))
+                    elif len(prefix) > 0 and prefix[-1] == c:
+                        # 与前缀末字符相同，分两种转移：
+                        # (a) 紧接重复（中间无 blank）-> CTC 折叠规则，prefix
+                        #     不变，只能来自"非 blank 结尾"的路径
+                        _add(new_beam, prefix, NEG_INF, nb_score + p,
+                             (lm_score, n_words, words, partial))
+                        # (b) blank 之后再出现 c -> 是新字符，应生成 prefix+c，
+                        #     只能来自"blank 结尾"的路径
+                        # （若 c 是连续空格，不拼进残词）
+                        _add(new_beam, prefix + (c,), NEG_INF, b_score + p,
+                             (lm_score, n_words, words,
+                              partial if c == space_id else partial + self.vocab.idx2char[c]))
+                    elif use_lm and c == space_id:
+                        # 空格：词边界。partial 非空时把这个词写入 LM 分数
+                        if partial:
+                            new_lm = (lm_score + lm.log_prob(partial, words[-3:]),
+                                      n_words + 1, words + (partial,), "")
                         else:
-                            # 新字符
-                            new_prefix = prefix + (c,)
-                            new_b_score = b_score
-                            new_nb_score = total_score + np.log(p)
+                            new_lm = (lm_score, n_words, words, partial)
+                        _add(new_beam, prefix + (c,), NEG_INF, total_score + p, new_lm)
+                    else:
+                        # 新字符：blank / 非 blank 结尾的路径均可转移
+                        _add(new_beam, prefix + (c,), NEG_INF, total_score + p,
+                             (lm_score, n_words, words, partial + self.vocab.idx2char[c]))
 
-                    new_prefix = prefix if c == self.blank_id else (
-                        prefix if (len(prefix) > 0 and prefix[-1] == c) else prefix + (c,)
-                    )
-                    old_b_score, old_nb_score = new_beam.get(new_prefix, (float("-inf"), float("-inf")))
-                    new_beam[new_prefix] = (
-                        np.logaddexp(old_b_score, new_b_score),
-                        np.logaddexp(old_nb_score, new_nb_score),
-                    )
-
-            # 裁剪beam
+            # 裁剪 beam（排序分数含 LM 项）
             scored_beam = []
-            for prefix, (b_score, nb_score) in new_beam.items():
-                score = np.logaddexp(b_score, nb_score)
-                scored_beam.append((prefix, b_score, nb_score, score))
+            for prefix, (b_score, nb_score, lm_score, n_words, _, _) in new_beam.items():
+                score = (np.logaddexp(b_score, nb_score)
+                         + (lm_alpha * lm_score + lm_beta * n_words if use_lm else 0.0))
+                scored_beam.append((prefix, b_score, nb_score, score, new_beam[prefix]))
             scored_beam.sort(key=lambda x: x[3], reverse=True)
-            beam = {item[0]: (item[1], item[2]) for item in scored_beam[:beam_width]}
+            beam = {item[0]: item[4] for item in scored_beam[:beam_width]}
 
-        # 收集结果
+        # 收集结果（句尾残词也计入 LM 分数）
         results = []
-        for prefix, (b_score, nb_score) in beam.items():
+        for prefix, (b_score, nb_score, lm_score, n_words, words, partial) in beam.items():
             score = np.logaddexp(b_score, nb_score)
-            text = self.vocab.decode(list(prefix))
-            results.append((text, float(score)))
-
-        results.sort(key=lambda x: x[1], reverse=True)
-        return results[0][0], results
-
-    # ================================================================
-    # 前缀束搜索 (Prefix Beam Search) - 更准确的CTC解码
-    # ================================================================
-    def _prefix_beam_search(
-        self,
-        log_probs: torch.Tensor,
-        beam_width: int = 10,
-    ) -> Tuple[str, List[Tuple[str, float]]]:
-        """
-        前缀束搜索: 在beam的每一步合并相同前缀的不同路径
-
-        参考: "First-Pass Large Vocabulary Continuous Speech Recognition using Bi-Directional Recurrent DNNs"
-        """
-        T, C = log_probs.shape
-        probs = log_probs.exp().cpu().numpy()
-
-        # 初始化: 空前缀
-        # 每个beam: prefix -> (p_b, p_nb)
-        # p_b: 以blank结尾的概率
-        # p_nb: 以非blank结尾的概率
-        beam = {tuple(): (1.0, 0.0)}
-
-        for t in range(T):
-            new_beam = {}
-
-            for prefix, (p_b, p_nb) in beam.items():
-                # 跳过概率为0的beam
-                if p_b == 0.0 and p_nb == 0.0:
-                    continue
-
-                for c in range(C):
-                    prob_c = probs[t, c]
-
-                    if c == self.blank_id:
-                        # blank: 不改变prefix
-                        new_p_b, new_p_nb = new_beam.get(prefix, (0.0, 0.0))
-                        new_p_b += (p_b + p_nb) * prob_c
-                        new_beam[prefix] = (new_p_b, new_p_nb)
-                    else:
-                        if len(prefix) > 0 and prefix[-1] == c:
-                            # 相同字符扩展
-                            new_prefix = prefix
-                            new_p_b, new_p_nb = new_beam.get(new_prefix, (0.0, 0.0))
-                            new_p_nb += p_b * prob_c  # 从blank来
-                            new_p_nb += p_nb * prob_c  # 延续非blank
-                            new_beam[new_prefix] = (new_p_b, new_p_nb)
-                        else:
-                            # 新字符
-                            new_prefix = prefix + (c,)
-                            new_p_b, new_p_nb = new_beam.get(new_prefix, (0.0, 0.0))
-                            new_p_nb += (p_b + p_nb) * prob_c
-                            new_beam[new_prefix] = (new_p_b, new_p_nb)
-
-            # 裁剪beam
-            scored = [(pref, b + nb) for pref, (b, nb) in new_beam.items()]
-            scored.sort(key=lambda x: x[1], reverse=True)
-            beam = {pref: new_beam[pref] for pref, _ in scored[:beam_width]}
-
-        # 收集最终结果
-        results = []
-        for prefix, (p_b, p_nb) in beam.items():
-            score = np.log(p_b + p_nb + 1e-30)
+            if use_lm:
+                lm_s, nw = lm_score, n_words
+                if partial:
+                    lm_s += lm.log_prob(partial, words[-3:])
+                    nw += 1
+                score += lm_alpha * lm_s + lm_beta * nw
             text = self.vocab.decode(list(prefix))
             results.append((text, float(score)))
 
